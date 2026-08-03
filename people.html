@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>People — Your Name Photography</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <div class="site-nav-inner">
+    <a class="site-nav-mark" href="index.html">Your Name</a>
+    <div class="site-nav-links">
+      <a href="nature.html">Nature</a>
+      <a href="street.html">Street</a>
+      <a href="people.html" class="active">People</a>
+      <a href="about.html">About</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap-wide">
+  <header class="gallery-header">
+    <span class="eyebrow">Gallery</span>
+    <h1 style="margin-top:10px;">People</h1>
+  </header>
+
+  <div class="filterbar">
+    <span class="chip active" data-filter="all">All</span>
+    <span class="chip" data-filter="leica">Leica D-Lux 7</span>
+    <span class="chip" data-filter="iphone">iPhone</span>
+    <span class="chip" data-filter="film">Film</span>
+  </div>
+
+  <!--
+    Each tile below is a placeholder. To add a photo:
+    1. Drop the image file into assets/images/
+    2. Replace the empty <div class="tile-img"> with:
+       <img class="tile-img" src="assets/images/your-file.jpg" alt="">
+    3. Set data-gear to "leica", "iphone", or "film" to match the filter bar
+    4. Duplicate the whole <div class="tile">...</div> block to add more
+  -->
+  <div class="gallery-grid">
+    <div class="tile" data-gear="leica">
+      <div class="tile-img"></div>
+      <div class="tile-cap">Leica D-Lux 7</div>
+    </div>
+    <div class="tile" data-gear="iphone">
+      <div class="tile-img"></div>
+      <div class="tile-cap">iPhone</div>
+    </div>
+    <div class="tile" data-gear="film">
+      <div class="tile-img"></div>
+      <div class="tile-cap">Film</div>
+    </div>
+    <div class="tile" data-gear="leica">
+      <div class="tile-img"></div>
+      <div class="tile-cap">Leica D-Lux 7</div>
+    </div>
+    <div class="tile" data-gear="film">
+      <div class="tile-img"></div>
+      <div class="tile-cap">Film</div>
+    </div>
+    <div class="tile" data-gear="iphone">
+      <div class="tile-img"></div>
+      <div class="tile-cap">iPhone</div>
+    </div>
+    <div class="tile" data-gear="leica">
+      <div class="tile-img"></div>
+      <div class="tile-cap">Leica D-Lux 7</div>
+    </div>
+    <div class="tile" data-gear="film">
+      <div class="tile-img"></div>
+      <div class="tile-cap">Film</div>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="wrap-wide">
+    <span>&copy; 2026 Your Name</span>
+    <span>Nature &middot; Street &middot; People</span>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
