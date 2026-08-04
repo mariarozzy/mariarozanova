@@ -1,53 +1,48 @@
-# Your Name — Photography
+# Maria Rozanova — Photography
 
-A minimal, no-build photography portfolio: plain HTML/CSS/JS, ready for GitHub Pages.
+A minimal, no-build photography portfolio: plain HTML/CSS/JS, hosted on GitHub Pages.
+
+- **Repo:** https://github.com/mariarozzy/mariarozanova
+- **Live site:** https://mariarozzy.github.io/mariarozanova/ (once Pages is turned on in repo Settings → Pages)
 
 ## Structure
 
 - `index.html` — home page (hero + thesis line)
-- `nature.html`, `street.html`, `people.html` — the three galleries, one shared template
-- `about.html` — bio, philosophy, availability
+- `nature.html`, `street.html`, `people.html` — the three galleries
+- `about.html` — bio, philosophy, contact
 - `work.html` — marketing/graphic design, **intentionally not linked from the nav**
 - `style.css` — the whole design system (colors, type, layout) in one file
 - `script.js` — the gear filter bar on gallery pages
-- `assets/images/` — drop your photos here
+- `photos/<gallery>/<leica|iphone|film>/` — where your actual photos live
+- `build_galleries.py` — regenerates the gallery pages from whatever's in `photos/`
 
-## Publish it on GitHub Pages
+## Adding photos (no HTML editing needed)
 
-1. Create a new repository on GitHub (public, no README/gitignore needed — this folder already has them).
-2. From this folder, run:
+1. Drop image files into the matching folder, e.g. `photos/nature/leica/` for a nature shot taken on the Leica.
+   - Folders: `nature`, `street`, `people` — each with `leica/`, `iphone/`, `film/` inside.
+2. Run:
    ```
-   git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPO.git
-   git branch -M main
-   git push -u origin main
+   python3 build_galleries.py
    ```
-3. On GitHub: **Settings → Pages → Source → Deploy from a branch → main / (root)**.
-4. Your site is live at `https://YOUR-USERNAME.github.io/YOUR-REPO/` a minute or two later.
+   This rewrites the gallery grid on the matching page (`nature.html`, `street.html`, or `people.html`) to include every photo currently sitting in its folders — nothing else on the page is touched.
+3. Commit and push:
+   ```
+   git add -A
+   git commit -m "Add photos"
+   git push
+   ```
 
-To use a custom domain, add a `CNAME` file with your domain in it, and point your domain's DNS at GitHub Pages per [their docs](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site).
+To remove a photo, delete the file from its `photos/` subfolder and rerun the script. Order on the page follows filename order within each gear folder — rename files with a number prefix (`01-`, `02-`...) if you want to control the sequence.
 
-## Adding photos
+If you'd rather not touch the terminal at all, just tell Claude "I added photos to [folder]" and it'll run the script and push for you.
 
-Each gallery page has placeholder tiles like this:
+## Editing anything else
 
-```html
-<div class="tile" data-gear="leica">
-  <div class="tile-img"></div>
-  <div class="tile-cap">Leica D-Lux 7</div>
-</div>
-```
-
-To swap in a real photo:
-1. Put the image file in `assets/images/`.
-2. Replace `<div class="tile-img"></div>` with `<img class="tile-img" src="assets/images/your-file.jpg" alt="">`.
-3. Set `data-gear` to `leica`, `iphone`, or `film` so the filter bar picks it up.
-4. Copy/paste the whole `<div class="tile">...</div>` block to add more — delete extras to remove.
-
-Same pattern for the hero image on `index.html` (the empty `.hero-image` div near the top).
+Simplest: tell Claude what to change in this chat. It edits the files and pushes.
 
 ## Keeping "Work" unlisted
 
-`work.html` exists and works, but nothing on the site links to it and it's marked `noindex` — visit it directly at `yoursite.com/work.html`, or send that link when you want to share it. When you're ready to make it public, add `<a href="work.html">Work</a>` to the nav in each page's `<div class="site-nav-links">`.
+`work.html` exists and works, but nothing on the site links to it and it's marked `noindex` — visit it directly at `/work.html`, or share that link directly. To make it public, add `<a href="work.html">Work</a>` to the nav (`.site-nav-links`) in each page.
 
 ## Editing the palette or type
 
@@ -61,4 +56,4 @@ Everything is CSS custom properties at the top of `style.css`:
 --charcoal: #0D0F13;/* solid fills only */
 ```
 
-Fonts (Playfair Display for headings, Inconsolata for labels/tags) load from Google Fonts at the top of `style.css` — no local files to manage.
+Fonts (Playfair Display for headings, Inconsolata for labels/tags) load from Google Fonts at the top of `style.css`.
