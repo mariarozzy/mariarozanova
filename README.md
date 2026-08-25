@@ -24,7 +24,7 @@ A minimal, no-build photography portfolio: plain HTML/CSS/JS, hosted on GitHub P
    ```
    python3 build_galleries.py
    ```
-   This rewrites the gallery grid on the matching page (`nature.html`, `street.html`, or `people.html`) to include every photo currently sitting in its folders — nothing else on the page is touched.
+   This rewrites the gallery grid on the matching page (`nature.html`, `street.html`, or `people.html`) to include every photo currently sitting in its folders — nothing else on the page is touched. It also strips any GPS location data out of the photo files themselves before building, since this repo is public (needs `pip3 install --user Pillow pillow-heif` once, if not already installed).
 3. Commit and push:
    ```
    git add -A

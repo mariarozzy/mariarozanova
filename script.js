@@ -14,4 +14,17 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   });
+
+  // Home page: shuffle the combined gallery into a new order every load.
+  var homeGallery = document.getElementById('homeGallery');
+  if (homeGallery) {
+    var homeTiles = Array.prototype.slice.call(homeGallery.querySelectorAll('.tile'));
+    for (var i = homeTiles.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var temp = homeTiles[i];
+      homeTiles[i] = homeTiles[j];
+      homeTiles[j] = temp;
+    }
+    homeTiles.forEach(function (tile) { homeGallery.appendChild(tile); });
+  }
 });
