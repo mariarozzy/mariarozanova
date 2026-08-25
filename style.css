@@ -113,7 +113,7 @@ body{ padding-left: var(--nav-width); }
 
 /* ---------- home banner ---------- */
 .home-banner{
-  width: calc(100% - 28px); height: 340px; overflow: hidden;
+  margin: 0 28px; height: 340px; overflow: hidden;
   background: var(--charcoal); border-bottom: 1px solid var(--line);
   display: flex; align-items: center; justify-content: center;
 }
