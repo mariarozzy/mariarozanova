@@ -167,12 +167,18 @@ body{ padding-left: var(--nav-width); }
 .about p{ margin-bottom: 22px; font-size: 1.05rem; }
 .about .label{ display:block; margin-top: 50px; margin-bottom: 10px; }
 
-/* ---------- work (unlisted) ---------- */
-.work-grid{ display:grid; grid-template-columns: repeat(2,1fr); gap: 20px; padding-bottom: 90px; }
-@media (max-width: 700px){ .work-grid{ grid-template-columns: 1fr; } }
-.work-card{ border: 1px solid var(--line); border-radius: 4px; padding: 24px; background: var(--charcoal); }
-.work-card h3{ font-size: 1.1rem; margin-bottom: 8px; }
-.work-card p{ color: var(--sage); font-size: 0.92rem; }
+/* ---------- projects (unlisted) ---------- */
+.project-list{ display:flex; flex-direction:column; padding-bottom: 90px; }
+.project{ padding: 56px 0; border-top: 1px solid var(--line); }
+.project:first-child{ border-top: none; padding-top: 8px; }
+.project-head{ display:flex; align-items:baseline; justify-content:space-between; gap: 20px; flex-wrap:wrap; }
+.project-head h2{ font-size: clamp(1.5rem, 3vw, 2rem); }
+.project-date{
+  font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--sage); white-space: nowrap;
+}
+.project-desc{ margin-top: 14px; max-width: 60ch; color: var(--ink); font-size: 1rem; line-height: 1.6; }
+.project .gallery-grid{ margin-top: 28px; padding-bottom: 0; }
 
 /* ---------- footer ---------- */
 .site-footer{ border-top: 1px solid var(--line); padding: 30px 0; }

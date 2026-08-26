@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 Rebuilds the gallery grids in nature.html / street.html / people.html,
-plus the combined all-photos grid on index.html, from whatever image
-files are sitting in photos/<gallery>/<gear>/.
+plus the combined all-photos grid on index.html, plus the per-project
+galleries on projects.html — from whatever image files are sitting in
+photos/<gallery>/<gear>/ and projects/<project>/.
 
 Before building, it also strips GPS location data out of any photo that
 still has it — this repo is public, so nothing here should leak where a
@@ -11,10 +12,11 @@ shot was taken. Requires: pip3 install --user Pillow pillow-heif
 Usage:
     python3 build_galleries.py
 
-Just drop photos into the matching folder (photos/nature/leica, etc.)
-and rerun this. It only touches the block between the GALLERY:START and
-GALLERY:END comments in each page — nothing else on the page is changed.
-The home page shuffles its grid client-side (script.js) on every load.
+Just drop photos into the matching folder (photos/nature/leica, etc.,
+or projects/spanish-chamber/, etc.) and rerun this. It only touches the
+block between each page's GALLERY:START/END comments — nothing else on
+the page is changed. The home page shuffles its grid client-side
+(script.js) on every load.
 """
 
 import re
@@ -31,6 +33,7 @@ except ImportError:
 ROOT = Path(__file__).parent
 GALLERIES = ["nature", "street", "people"]
 GEAR_LABELS = {"leica": "Leica D-Lux 7", "iphone": "iPhone", "film": "Film"}
+PROJECTS = ["spanish-chamber", "ama", "arch-sc", "design-theory"]
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 GPS_IFD_TAG = 0x8825
 
@@ -67,6 +70,13 @@ def find_photos(gallery):
             if f.suffix.lower() in IMAGE_EXTS:
                 photos.append((gear, f))
     return photos
+
+
+def find_project_images(project):
+    folder = ROOT / "projects" / project
+    if not folder.exists():
+        return []
+    return [f for f in sorted(folder.iterdir()) if f.suffix.lower() in IMAGE_EXTS]
 
 
 def render_grid(photos):
@@ -113,18 +123,39 @@ def render_home_grid(all_photos):
     return '  <div class="gallery-grid" id="homeGallery">\n' + '\n'.join(tiles) + '\n  </div>'
 
 
-def update_page(gallery, grid_html_fn, marker_file=None):
-    page = ROOT / (marker_file or f"{gallery}.html")
+def render_project_grid(project, images):
+    if not images:
+        return (
+            '  <div class="gallery-grid">\n'
+            '    <p style="color:var(--sage); font-family:var(--font-mono); '
+            f'font-size:0.85rem;">No designs yet — drop files into projects/{project}/ '
+            'and rerun build_galleries.py.</p>\n'
+            '  </div>'
+        )
+    tiles = []
+    for path in images:
+        rel = path.relative_to(ROOT).as_posix()
+        tiles.append(
+            f'    <div class="tile">\n'
+            f'      <img class="tile-img" src="{rel}" alt="">\n'
+            f'    </div>'
+        )
+    return '  <div class="gallery-grid">\n' + '\n'.join(tiles) + '\n  </div>'
+
+
+def update_page(page_name, grid_html_fn, key=None):
+    page = ROOT / page_name
     html = page.read_text()
     grid_html = grid_html_fn()
 
-    pattern = re.compile(
-        r"(<!-- GALLERY:START.*?-->\n).*?(\n\s*<!-- GALLERY:END -->)",
-        re.DOTALL,
-    )
+    start = re.escape(f"<!-- GALLERY:START:{key}") if key else re.escape("<!-- GALLERY:START")
+    end = re.escape(f"<!-- GALLERY:END:{key} -->") if key else re.escape("<!-- GALLERY:END -->")
+    pattern = re.compile(rf"({start}.*?-->\n).*?(\n\s*{end})", re.DOTALL)
+
     new_html, count = pattern.subn(lambda m: m.group(1) + grid_html + m.group(2), html)
     if count == 0:
-        print(f"  ! Couldn't find GALLERY:START/END markers in {page.name} — skipped")
+        label = f"{page.name} [{key}]" if key else page.name
+        print(f"  ! Couldn't find GALLERY:START/END markers for {label} — skipped")
         return
     page.write_text(new_html)
 
@@ -144,12 +175,21 @@ if __name__ == "__main__":
             if strip_gps(path):
                 stripped_count += 1
         all_photos.extend((gallery, gear, path) for gear, path in photos)
-        update_page(gallery, lambda p=photos: render_grid(p))
+        update_page(f"{gallery}.html", lambda p=photos: render_grid(p))
         print(f"  {gallery}.html — {len(photos)} photo(s)")
 
-    if stripped_count:
-        print(f"  Removed GPS data from {stripped_count} photo(s)")
-
-    update_page(None, lambda: render_home_grid(all_photos), marker_file="index.html")
+    update_page("index.html", lambda: render_home_grid(all_photos))
     print(f"  index.html — {len(all_photos)} photo(s) (shuffled on each page load)")
+
+    for project in PROJECTS:
+        images = find_project_images(project)
+        for path in images:
+            if strip_gps(path):
+                stripped_count += 1
+        update_page("projects.html", lambda i=images, p=project: render_project_grid(p, i), key=project)
+        print(f"  projects.html [{project}] — {len(images)} design(s)")
+
+    if stripped_count:
+        print(f"  Removed GPS data from {stripped_count} file(s)")
+
     print("Done. Review the changes, then commit and push.")

@@ -7,14 +7,15 @@ A minimal, no-build photography portfolio: plain HTML/CSS/JS, hosted on GitHub P
 
 ## Structure
 
-- `index.html` — home page (hero + thesis line)
+- `index.html` — home page (banner, "Photography" heading, shuffled all-photos gallery)
 - `nature.html`, `street.html`, `people.html` — the three galleries
 - `about.html` — bio, philosophy, contact
-- `work.html` — marketing/graphic design, **intentionally not linked from the nav**
+- `projects.html` — marketing/graphic design case studies, **intentionally not linked from the nav**
 - `style.css` — the whole design system (colors, type, layout) in one file
-- `script.js` — the gear filter bar on gallery pages
+- `script.js` — the gear filter bar + home page shuffle
 - `photos/<gallery>/<leica|iphone|film>/` — where your actual photos live
-- `build_galleries.py` — regenerates the gallery pages from whatever's in `photos/`
+- `projects/<project-slug>/` — design files for each project on `projects.html`
+- `build_galleries.py` — regenerates all the galleries above from whatever's in `photos/` and `projects/`
 
 ## Adding photos (no HTML editing needed)
 
@@ -36,13 +37,26 @@ To remove a photo, delete the file from its `photos/` subfolder and rerun the sc
 
 If you'd rather not touch the terminal at all, just tell Claude "I added photos to [folder]" and it'll run the script and push for you.
 
+## Adding project designs (projects.html)
+
+Same idea as photos, one folder per project:
+
+- `projects/spanish-chamber/`
+- `projects/ama/`
+- `projects/arch-sc/`
+- `projects/design-theory/`
+
+Drop design files into the matching folder and run `python3 build_galleries.py` — it fills in that project's gallery on `projects.html` without touching the title, date, or description text. Edit those directly in `projects.html` (each is a plain `<h2>`, `<span class="project-date">`, and `<p class="project-desc">`).
+
+To add a whole new project: copy one `<section class="project">...</section>` block in `projects.html`, give its gallery markers a new unique key (e.g. `GALLERY:START:my-new-project` / `GALLERY:END:my-new-project`), add the matching slug to the `PROJECTS` list at the top of `build_galleries.py`, and create `projects/my-new-project/`.
+
 ## Editing anything else
 
 Simplest: tell Claude what to change in this chat. It edits the files and pushes.
 
-## Keeping "Work" unlisted
+## Keeping "Projects" unlisted
 
-`work.html` exists and works, but nothing on the site links to it and it's marked `noindex` — visit it directly at `/work.html`, or share that link directly. To make it public, add `<a href="work.html">Work</a>` to the nav (`.site-nav-links`) in each page.
+`projects.html` exists and works, but nothing on the site links to it and it's marked `noindex` — visit it directly at `/projects.html`, or share that link directly. To make it public, add `<a href="projects.html">Projects</a>` to the nav (`.site-nav-links`) in each page.
 
 ## Editing the palette or type
 
