@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Photo Picker</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inconsolata:wght@400;600&display=swap');
+
+:root{
+  --bg: #16233A; --bg-panel: #1E2E48; --ink: #F7F5EE; --sage: #7E9070;
+  --yellow: #F5DD90; --charcoal: #0D0F13; --line: #283A57;
+}
+*{ box-sizing: border-box; }
+body{
+  margin:0; background: var(--bg); color: var(--ink);
+  font-family: Georgia, serif; padding: 40px;
+}
+h1{ font-family:'Playfair Display', serif; margin: 0 0 4px; }
+.sub{ font-family:'Inconsolata', monospace; font-size:0.8rem; color: var(--sage); letter-spacing:0.04em; }
+#empty{ margin-top: 60px; font-family:'Inconsolata', monospace; color: var(--sage); font-size:0.9rem; display:none; }
+
+.grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 30px; }
+.card{
+  background: var(--bg-panel); border: 1px solid var(--line); border-radius: 4px; overflow:hidden;
+  display:flex; flex-direction:column; transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.card.removing{ opacity:0; transform: scale(0.94); }
+.card img{ width:100%; aspect-ratio: 4/3; object-fit:cover; display:block; background: var(--charcoal); }
+.card-body{ padding: 12px; display:flex; flex-direction:column; gap:8px; }
+.card-name{
+  font-family:'Inconsolata', monospace; font-size: 0.66rem; color: var(--sage);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+select{
+  width:100%; font-family:'Inconsolata', monospace; font-size: 0.78rem;
+  background: var(--charcoal); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 3px; padding: 6px 8px;
+}
+.row{ display:flex; gap:8px; }
+.row select{ flex:1; }
+.actions{ display:flex; gap:8px; margin-top:2px; }
+button{
+  flex:1; font-family:'Inconsolata', monospace; font-size: 0.72rem; letter-spacing:0.06em; text-transform:uppercase;
+  border-radius: 999px; padding: 8px 0; cursor:pointer; border: 1px solid transparent;
+}
+.assign{ background: var(--yellow); color: var(--charcoal); font-weight:600; }
+.discard{ background: transparent; color: var(--sage); border-color: var(--line); }
+.discard:hover{ color: var(--ink); border-color: var(--sage); }
+.status{ font-family:'Inconsolata', monospace; font-size:0.68rem; color: var(--yellow); min-height: 1em; }
+</style>
+</head>
+<body>
+<h1>Photo Picker</h1>
+<span class="sub" id="count">Loading…</span>
+<div id="empty">No photos in the inbox — drop some into <code>photos_inbox/</code> and reload this page.</div>
+<div class="grid" id="grid"></div>
+
+<script>
+const grid = document.getElementById('grid');
+const countEl = document.getElementById('count');
+const emptyEl = document.getElementById('empty');
+
+async function load() {
+  const res = await fetch('/api/inbox');
+  const data = await res.json();
+  render(data);
+}
+
+function render(data) {
+  grid.innerHTML = '';
+  countEl.textContent = data.files.length + ' photo(s) in the inbox';
+  emptyEl.style.display = data.files.length ? 'none' : 'block';
+
+  data.files.forEach(filename => {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const img = document.createElement('img');
+    img.src = '/inbox/' + encodeURIComponent(filename);
+    card.appendChild(img);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    const name = document.createElement('div');
+    name.className = 'card-name';
+    name.textContent = filename;
+    body.appendChild(name);
+
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const gallerySel = document.createElement('select');
+    data.galleries.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g; opt.textContent = g[0].toUpperCase() + g.slice(1);
+      gallerySel.appendChild(opt);
+    });
+    row.appendChild(gallerySel);
+
+    const gearSel = document.createElement('select');
+    data.gear.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g; opt.textContent = data.gearLabels[g];
+      gearSel.appendChild(opt);
+    });
+    row.appendChild(gearSel);
+    body.appendChild(row);
+
+    const status = document.createElement('div');
+    status.className = 'status';
+    body.appendChild(status);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const assignBtn = document.createElement('button');
+    assignBtn.className = 'assign';
+    assignBtn.textContent = 'Assign';
+    assignBtn.onclick = () => act('/api/assign', {
+      filename, gallery: gallerySel.value, gear: gearSel.value
+    }, card, status, 'Assigned');
+
+    const discardBtn = document.createElement('button');
+    discardBtn.className = 'discard';
+    discardBtn.textContent = 'Discard';
+    discardBtn.onclick = () => act('/api/discard', { filename }, card, status, 'Discarded');
+
+    actions.appendChild(assignBtn);
+    actions.appendChild(discardBtn);
+    body.appendChild(actions);
+
+    card.appendChild(body);
+    grid.appendChild(card);
+  });
+}
+
+async function act(url, payload, card, status, verb) {
+  status.textContent = 'Working…';
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      status.textContent = data.error || 'Something went wrong';
+      return;
+    }
+    status.textContent = verb;
+    card.classList.add('removing');
+    setTimeout(() => {
+      card.remove();
+      const remaining = grid.children.length;
+      countEl.textContent = remaining + ' photo(s) in the inbox';
+      emptyEl.style.display = remaining ? 'none' : 'block';
+    }, 300);
+  } catch (e) {
+    status.textContent = 'Network error';
+  }
+}
+
+load();
+</script>
+</body>
+</html>

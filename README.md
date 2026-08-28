@@ -19,9 +19,20 @@ A minimal, no-build photography portfolio: plain HTML/CSS/JS, hosted on GitHub P
 
 ## Adding photos (no HTML editing needed)
 
-1. Drop image files into the matching folder, e.g. `photos/nature/leica/` for a nature shot taken on the Leica.
+**Option A — sort by hand:** drop image files into the matching folder, e.g. `photos/nature/leica/` for a nature shot taken on the Leica.
    - Folders: `nature`, `street`, `people` — each with `leica/`, `iphone/`, `film/` inside.
+
+**Option B — the photo picker (easier when culling a lot of photos at once):**
+1. Drop any number of candidate photos into `photos_inbox/` — mixed sizes and orientations are fine.
 2. Run:
+   ```
+   python3 picker_server.py
+   ```
+   and open `http://localhost:8766/picker.html`.
+3. Every photo in the inbox shows up as a thumbnail. Pick a gallery + gear for each and click **Assign** (moves it into the right `photos/` folder, GPS-stripped automatically), or **Discard** to set it aside — discarded photos move to `photos_inbox/_discarded/`, nothing is ever deleted, so it's safe to change your mind.
+4. `photos_inbox/` is excluded from git, so nothing you haven't decided on can end up on the public site by accident.
+
+Either way, once photos are sorted into `photos/`, run:
    ```
    python3 build_galleries.py
    ```

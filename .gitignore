@@ -1,2 +1,6 @@
 .DS_Store
 .claude/
+_concepts/
+photos_inbox/*
+!photos_inbox/.gitkeep
+__pycache__/
