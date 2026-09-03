@@ -32,7 +32,25 @@ from build_galleries import GEAR_LABELS, IMAGE_EXTS, GALLERIES, strip_gps
 ROOT = Path(__file__).parent
 INBOX = ROOT / "photos_inbox"
 DISCARDED = INBOX / "_discarded"
+CROP_POSITIONS_FILE = ROOT / "photos" / "crop-positions.json"
 PORT = 8766
+
+
+def load_crop_positions():
+    """Per-photo focal point (as % of width/height) for how it's cropped in
+    the gallery grid — read by build_galleries.py, written from the picker's
+    'Adjust crop' tool. Photos with no entry just crop from the center."""
+    if not CROP_POSITIONS_FILE.exists():
+        return {}
+    try:
+        return json.loads(CROP_POSITIONS_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_crop_positions(positions):
+    CROP_POSITIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CROP_POSITIONS_FILE.write_text(json.dumps(positions, indent=2, sort_keys=True))
 
 
 def resolve_under(base: Path, rel_path: str):
@@ -81,6 +99,7 @@ def list_inbox():
 def list_assigned():
     """Every photo already sorted into photos/<gallery>/<gear>/, so it can be
     reviewed and moved to a different gallery/gear without touching Finder."""
+    positions = load_crop_positions()
     files = []
     for gallery in GALLERIES:
         for gear in GEAR_LABELS:
@@ -89,10 +108,14 @@ def list_assigned():
                 continue
             for f in sorted(folder.iterdir()):
                 if f.is_file() and f.suffix.lower() in IMAGE_EXTS:
+                    rel = f.relative_to(ROOT / "photos").as_posix()
+                    pos = positions.get(rel, {})
                     files.append({
-                        "path": f.relative_to(ROOT / "photos").as_posix(),
+                        "path": rel,
                         "gallery": gallery,
                         "gear": gear,
+                        "cropX": pos.get("x", 50),
+                        "cropY": pos.get("y", 50),
                     })
     return files
 
@@ -164,6 +187,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_reassign(payload)
         elif parsed.path == "/api/unassign":
             self._handle_unassign(payload)
+        elif parsed.path == "/api/set-crop":
+            self._handle_set_crop(payload)
         elif parsed.path in ("/api/assign", "/api/discard"):
             self._handle_inbox_action(parsed.path, payload)
         else:
@@ -217,6 +242,11 @@ class Handler(BaseHTTPRequestHandler):
         dest = src if src.parent == dest_dir else unique_dest(dest_dir, src.name)
         if dest != src:
             src.rename(dest)
+            # carry the saved crop position over to the new path, if any
+            positions = load_crop_positions()
+            if rel_path in positions:
+                positions[dest.relative_to(ROOT / "photos").as_posix()] = positions.pop(rel_path)
+                save_crop_positions(positions)
         self._json({"ok": True, "path": dest.relative_to(ROOT / "photos").as_posix()})
 
     def _handle_unassign(self, payload):
@@ -233,7 +263,39 @@ class Handler(BaseHTTPRequestHandler):
         DISCARDED.mkdir(exist_ok=True)
         dest = unique_dest(DISCARDED, src.name)
         src.rename(dest)
+        positions = load_crop_positions()
+        if rel_path in positions:
+            positions.pop(rel_path)
+            save_crop_positions(positions)
         self._json({"ok": True})
+
+    def _handle_set_crop(self, payload):
+        """Save (or reset) the focal point used to crop this photo in the
+        gallery grid — the file itself is never touched, just where the
+        4:3 crop is centered when the site builds."""
+        rel_path = payload.get("path", "")
+        target = resolve_under(ROOT / "photos", rel_path)
+        if not target or not target.exists():
+            self._json({"error": "invalid request"}, 400)
+            return
+
+        positions = load_crop_positions()
+        if payload.get("reset"):
+            positions.pop(rel_path, None)
+            save_crop_positions(positions)
+            self._json({"ok": True, "x": 50, "y": 50})
+            return
+
+        try:
+            x = max(0.0, min(100.0, float(payload.get("x"))))
+            y = max(0.0, min(100.0, float(payload.get("y"))))
+        except (TypeError, ValueError):
+            self._json({"error": "invalid x/y"}, 400)
+            return
+
+        positions[rel_path] = {"x": round(x, 1), "y": round(y, 1)}
+        save_crop_positions(positions)
+        self._json({"ok": True, "x": positions[rel_path]["x"], "y": positions[rel_path]["y"]})
 
     def _handle_transform(self, payload):
         """Rotate, flip, or crop a photo in place — works on inbox photos and

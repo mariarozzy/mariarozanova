@@ -92,6 +92,31 @@ button{
 .editor-toolbar button.primary{ background: var(--yellow); color: var(--charcoal); border-color: var(--yellow); font-weight:600; }
 .editor-toolbar button.close{ color: var(--sage); }
 .editor-status{ font-family:'Inconsolata', monospace; font-size:0.7rem; color: var(--yellow); min-height:1em; }
+
+/* ---------- gallery-preview / crop-position modal ---------- */
+.crop-pos-overlay{
+  position: fixed; inset:0; background: rgba(10,15,25,0.92); z-index:50;
+  display:none; align-items:center; justify-content:center;
+}
+.crop-pos-overlay.open{ display:flex; }
+.crop-pos-panel{ display:flex; gap:28px; align-items:flex-start; max-width:92vw; flex-wrap:wrap; justify-content:center; }
+.crop-pos-image-wrap{
+  position:relative; max-width:58vw; max-height:70vh; line-height:0; cursor:crosshair;
+  user-select:none; -webkit-user-select:none;
+}
+.crop-pos-image-wrap img{ display:block; max-width:58vw; max-height:70vh; width:auto; height:auto; }
+.crop-pos-marker{
+  position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px;
+  border:2px solid var(--yellow); border-radius:50%; background: rgba(245,221,144,0.25);
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.5); pointer-events:none;
+}
+.crop-pos-preview-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; width:220px; }
+.crop-pos-preview{
+  width:220px; aspect-ratio:4/3; overflow:hidden; border-radius:4px; border:1px solid var(--line); background:var(--charcoal);
+}
+.crop-pos-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
+.crop-pos-toolbar{ display:flex; gap:8px; width:100%; }
+.crop-pos-status{ font-family:'Inconsolata', monospace; font-size:0.7rem; color: var(--yellow); min-height:1em; }
 </style>
 </head>
 <body>
@@ -136,6 +161,24 @@ button{
       <button id="editorClose" class="close">Done</button>
     </div>
     <div class="editor-status" id="editorStatus"></div>
+  </div>
+</div>
+
+<div class="crop-pos-overlay" id="cropPosOverlay">
+  <div class="crop-pos-panel">
+    <div class="crop-pos-image-wrap" id="cropPosImageWrap">
+      <img id="cropPosImg" src="" alt="">
+      <div class="crop-pos-marker" id="cropPosMarker"></div>
+    </div>
+    <div class="crop-pos-preview-wrap">
+      <span class="sub">Gallery preview — click the photo to move it</span>
+      <div class="crop-pos-preview"><img id="cropPosPreviewImg" src="" alt=""></div>
+      <div class="crop-pos-toolbar">
+        <button id="cropPosReset" class="discard">Reset to center</button>
+        <button id="cropPosDone" class="assign">Done</button>
+      </div>
+      <div class="crop-pos-status" id="cropPosStatus"></div>
+    </div>
   </div>
 </div>
 
@@ -251,9 +294,12 @@ function renderAssigned(files) {
     card.className = 'card';
     let currentPath = file.path;
 
+    let cropPos = { x: file.cropX, y: file.cropY };
+
     const img = document.createElement('img');
     img.loading = 'lazy';
     img.src = '/photos/' + currentPath.split('/').map(encodeURIComponent).join('/');
+    img.style.objectPosition = cropPos.x + '% ' + cropPos.y + '%';
     img.onclick = () => openEditor({ source: 'photos', path: currentPath, imgEl: img });
     card.appendChild(img);
 
@@ -301,12 +347,24 @@ function renderAssigned(files) {
       } catch (e) { status.textContent = 'Network error'; }
     };
 
+    const previewBtn = document.createElement('button');
+    previewBtn.className = 'discard';
+    previewBtn.textContent = 'Preview';
+    previewBtn.onclick = () => openCropPosition({
+      get path() { return currentPath; },
+      imgEl: img,
+      x: cropPos.x,
+      y: cropPos.y,
+      onSave: (x, y) => { cropPos.x = x; cropPos.y = y; }
+    });
+
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove';
     removeBtn.textContent = 'Remove';
     removeBtn.onclick = () => act('/api/unassign', { path: currentPath }, card, status, 'Removed', () => { assignedGrid.removeChild(card); updateAssignedCount(); });
 
     actions.appendChild(moveBtn);
+    actions.appendChild(previewBtn);
     actions.appendChild(removeBtn);
     body.appendChild(actions);
 
@@ -473,6 +531,70 @@ cropApplyBtn.onclick = async () => {
   await sendTransform({ action: 'crop', box });
   exitCropMode();
 };
+
+/* ---------- gallery preview: adjust the crop focal point ---------- */
+const cropPosOverlay = document.getElementById('cropPosOverlay');
+const cropPosImageWrap = document.getElementById('cropPosImageWrap');
+const cropPosImg = document.getElementById('cropPosImg');
+const cropPosMarker = document.getElementById('cropPosMarker');
+const cropPosPreviewImg = document.getElementById('cropPosPreviewImg');
+const cropPosStatus = document.getElementById('cropPosStatus');
+let cropPosCurrent = null; // { path (getter), imgEl, x, y, onSave }
+
+function setCropMarker(x, y) {
+  cropPosMarker.style.left = x + '%';
+  cropPosMarker.style.top = y + '%';
+  cropPosPreviewImg.style.objectPosition = x + '% ' + y + '%';
+}
+
+function openCropPosition(target) {
+  cropPosCurrent = target;
+  cropPosStatus.textContent = '';
+  const src = '/photos/' + target.path.split('/').map(encodeURIComponent).join('/') + '?v=' + Date.now();
+  cropPosImg.src = src;
+  cropPosPreviewImg.src = src;
+  setCropMarker(target.x, target.y);
+  cropPosOverlay.classList.add('open');
+}
+function closeCropPosition() {
+  cropPosOverlay.classList.remove('open');
+  cropPosCurrent = null;
+}
+document.getElementById('cropPosDone').onclick = closeCropPosition;
+cropPosOverlay.addEventListener('click', e => { if (e.target === cropPosOverlay) closeCropPosition(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && cropPosOverlay.classList.contains('open')) closeCropPosition(); });
+
+async function saveCropPosition(x, y, reset) {
+  if (!cropPosCurrent) return;
+  cropPosStatus.textContent = 'Saving…';
+  try {
+    const body = reset
+      ? { path: cropPosCurrent.path, reset: true }
+      : { path: cropPosCurrent.path, x, y };
+    const res = await fetch('/api/set-crop', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) { cropPosStatus.textContent = data.error || 'Something went wrong'; return; }
+    setCropMarker(data.x, data.y);
+    if (cropPosCurrent.imgEl) cropPosCurrent.imgEl.style.objectPosition = data.x + '% ' + data.y + '%';
+    if (cropPosCurrent.onSave) cropPosCurrent.onSave(data.x, data.y);
+    cropPosStatus.textContent = 'Saved';
+    setTimeout(() => { cropPosStatus.textContent = ''; }, 1000);
+  } catch (e) {
+    cropPosStatus.textContent = 'Network error';
+  }
+}
+
+cropPosImageWrap.addEventListener('click', e => {
+  if (!cropPosCurrent) return;
+  const rect = cropPosImg.getBoundingClientRect();
+  const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+  const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+  saveCropPosition(x, y);
+});
+document.getElementById('cropPosReset').onclick = () => saveCropPosition(null, null, true);
 
 loadAll();
 </script>

@@ -23,6 +23,7 @@ every load; the carousel does not — it always shows photos/featured/ in
 the order listed there.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -41,6 +42,55 @@ GEAR_LABELS = {"leica": "Leica D-Lux 7", "iphone": "iPhone", "film": "Film"}
 PROJECTS = ["spanish-chamber", "ama", "arch-sc", "design-theory"]
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 GPS_IFD_TAG = 0x8825
+CROP_POSITIONS_FILE = ROOT / "photos" / "crop-positions.json"
+
+
+def load_crop_positions():
+    """Per-photo focal point (as % of width/height), set from the picker's
+    'Adjust crop' tool, keyed by path relative to photos/. Anything with no
+    entry just crops from the center, same as before."""
+    if not CROP_POSITIONS_FILE.exists():
+        return {}
+    try:
+        return json.loads(CROP_POSITIONS_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+# Straight-out-of-camera files run 5000px+ on the long edge and several MB
+# each — way more than a ~600px-wide grid tile or an 88vw lightbox ever
+# needs, and it's what was making the site slow to load. Capping the long
+# edge and re-compressing brings that down a lot with barely any visible
+# quality loss on screen.
+MAX_DIMENSION = 1800
+JPEG_QUALITY = 78
+
+
+def resize_for_web(path):
+    """Downscale a photo to MAX_DIMENSION on its long edge and re-save at
+    JPEG_QUALITY, if it's currently larger than that. Leaves the file
+    untouched if it's already small enough, so reruns don't needlessly
+    re-compress photos that were already processed. Re-saving without
+    exif= also strips any metadata (including GPS) as a side effect."""
+    if not HAS_PIL:
+        return None
+    try:
+        with Image.open(path) as img:
+            w, h = img.size
+            if max(w, h) <= MAX_DIMENSION:
+                return False
+            scale = MAX_DIMENSION / max(w, h)
+            new_size = (max(1, round(w * scale)), max(1, round(h * scale)))
+            resized = img.resize(new_size, Image.LANCZOS)
+            save_kwargs = {}
+            if path.suffix.lower() in {".jpg", ".jpeg"}:
+                if resized.mode != "RGB":
+                    resized = resized.convert("RGB")
+                save_kwargs = {"quality": JPEG_QUALITY, "optimize": True}
+            resized.save(path, **save_kwargs)
+            return True
+    except Exception as e:
+        print(f"  ! Couldn't resize {path.name}: {e}")
+        return None
 
 
 def strip_gps(path):
@@ -93,13 +143,17 @@ def render_home_grid(all_photos):
             '&lt;leica|iphone|film&gt;/ and rerun build_galleries.py.</p>\n'
             '  </div>'
         )
+    positions = load_crop_positions()
     tiles = []
     for gallery, gear, path in all_photos:
         rel = path.relative_to(ROOT).as_posix()
+        pos_key = path.relative_to(ROOT / "photos").as_posix()
+        pos = positions.get(pos_key)
+        style_attr = f' style="object-position: {pos["x"]}% {pos["y"]}%;"' if pos else ""
         label = GEAR_LABELS[gear]
         tiles.append(
             f'    <div class="tile" data-gear="{gear}" data-gallery="{gallery}">\n'
-            f'      <img class="tile-img" src="{rel}" alt="">\n'
+            f'      <img class="tile-img" src="{rel}" alt="" loading="lazy"{style_attr}>\n'
             f'      <div class="tile-cap">{label}</div>\n'
             f'    </div>'
         )
@@ -162,7 +216,15 @@ if __name__ == "__main__":
 
     print("Rebuilding galleries...")
     all_photos = []
-    stripped_count = 0
+    counts = {"stripped": 0, "resized": 0}
+
+    def optimize(path):
+        # Resizing already re-saves without exif (GPS included), so only
+        # fall back to a GPS-only strip when the photo didn't need resizing.
+        if resize_for_web(path):
+            counts["resized"] += 1
+        elif strip_gps(path):
+            counts["stripped"] += 1
 
     # Nature/Urban/People are organizational folders only now — there's no
     # separate page per gallery on the site, just this one combined grid.
@@ -170,8 +232,7 @@ if __name__ == "__main__":
     for gallery in GALLERIES:
         photos = find_photos(gallery)
         for _gear, path in photos:
-            if strip_gps(path):
-                stripped_count += 1
+            optimize(path)
         all_photos.extend((gallery, gear, path) for gear, path in photos)
         print(f"  {gallery}/ — {len(photos)} photo(s)")
 
@@ -180,20 +241,20 @@ if __name__ == "__main__":
 
     featured = find_photos(FEATURED)
     for _gear, path in featured:
-        if strip_gps(path):
-            stripped_count += 1
+        optimize(path)
     update_page("index.html", lambda p=featured: render_carousel(p), marker="CAROUSEL")
     print(f"  index.html [carousel] — {len(featured)} featured photo(s)")
 
     for project in PROJECTS:
         images = find_project_images(project)
         for path in images:
-            if strip_gps(path):
-                stripped_count += 1
+            optimize(path)
         update_page("projects.html", lambda i=images, p=project: render_project_grid(p, i), key=project)
         print(f"  projects.html [{project}] — {len(images)} design(s)")
 
-    if stripped_count:
-        print(f"  Removed GPS data from {stripped_count} file(s)")
+    if counts["resized"]:
+        print(f"  Resized {counts['resized']} file(s) for the web")
+    if counts["stripped"]:
+        print(f"  Removed GPS data from {counts['stripped']} file(s)")
 
     print("Done. Review the changes, then commit and push.")

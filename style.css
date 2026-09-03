@@ -150,13 +150,13 @@ p{ margin: 0; color: var(--ink); }
 @media (max-width: 640px){ .gallery-grid{ grid-template-columns: 1fr; gap: 22px; } }
 
 .tile{
-  position:relative; border-radius: 2px; overflow: hidden; background: var(--charcoal);
+  position:relative; border-radius: 2px; overflow: hidden;
   border: 2px solid transparent; transition: border-color 0.2s ease;
 }
 .tile:nth-child(3n+1):hover{ border-color: var(--pink); }
 .tile:nth-child(3n+2):hover{ border-color: var(--yellow); }
 .tile:nth-child(3n+3):hover{ border-color: var(--green); }
-.tile-img{ aspect-ratio: 4/3; width: 100%; object-fit: cover; display:block; background: var(--charcoal); cursor: zoom-in; }
+.tile-img{ aspect-ratio: 4/3; width: 100%; object-fit: cover; display:block; cursor: zoom-in; }
 .tile-cap{
   position:absolute; left:0; right:0; bottom:0; padding: 14px 16px;
   font-family: var(--font-mono); font-weight: 700; font-size: 0.66rem; letter-spacing:0.07em; text-transform:uppercase;
