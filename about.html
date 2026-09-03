@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>About — Maria Rozanova Photography</title>
+<title>About Me — Maria Rozanova Photography</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,40 +12,63 @@
   <div class="site-nav-inner">
     <a class="site-nav-mark" href="index.html">Maria Rozanova</a>
     <div class="site-nav-links">
-      <a href="nature.html">Nature</a>
-      <a href="street.html">Street</a>
-      <a href="people.html">People</a>
-      <a href="about.html" class="active">About</a>
+      <a href="index.html">Gallery</a>
+      <a href="about.html" class="active">About Me</a>
     </div>
   </div>
 </nav>
 
 <div class="wrap about">
-  <h1>About</h1>
+  <h1>About Me</h1>
 
-  <p>
-    Write your background here — how you got into photography, what draws you
-    to a shot, the thread that connects Nature, Street, and People into one
-    body of work.
-  </p>
+  <div class="about-wrap">
+    <div class="about-portrait" id="aboutPortrait">
+      <img src="assets/maria-portrait.png" alt="Maria Rozanova taking a photo in a mirrored room"
+           onerror="document.getElementById('aboutPortrait').classList.add('img-missing'); this.remove();">
+      <div class="placeholder">Drop the background-removed<br>photo in as<br><strong>assets/maria-portrait.png</strong></div>
+    </div>
 
-  <p>
-    Write a paragraph on your visual philosophy — the thesis on the home page
-    ("I find beauty in details and love capturing life in all its various
-    forms") is a good place to start. What does that mean in practice, for
-    the way you frame, wait, and choose a moment?
-  </p>
+    <div class="about-text">
+      <p class="intro-greeting">Hi! I'm Maria</p>
 
-  <span class="label">Contact</span>
-  <p>
-    <a href="mailto:rozanova.mariaa@gmail.com">rozanova.mariaa@gmail.com</a>
-  </p>
+      <p>
+        Since I was 14, I've found joy in taking pictures of everything. It puts
+        me into a flow state by helping me to slow down, observe details, and
+        appreciate the little things.
+      </p>
+
+      <p>
+        Growing past my iPad kid phase, I realized I could direct my eyes into
+        different lenses and convert my screen time to something more
+        productive: shaping how I see the world. I started with iPhone
+        photography during my travels, becoming obsessed with capturing and
+        reflecting on different ways of life, spotting cool patterns in
+        architecture, and learning to be fully present with myself and
+        surroundings.
+      </p>
+
+      <p>
+        I also tend to romanticize every little thing. I love to capture beauty
+        in the details — in the chaos and in the mundane. I love nature and
+        picturing nature, and am hoping to be promoted from the "photographer
+        friend" to the "digi friend" as I build my ability to capture
+        individuals. I currently own 6 cameras of different types, mainly
+        shooting with my Leica D-Lux 7. I hope to do freelance photography on
+        the side in the future. :)
+      </p>
+
+      <span class="label">Contact</span>
+      <p>
+        <a href="mailto:rozanova.mariaa@gmail.com">rozanova.mariaa@gmail.com</a>
+      </p>
+    </div>
+  </div>
 </div>
 
 <footer class="site-footer">
   <div class="wrap-wide">
     <span>&copy; 2026 Maria Rozanova</span>
-    <span>Nature &middot; Street &middot; People</span>
+    <span>Nature &middot; Urban / Travel &middot; People</span>
   </div>
 </footer>
 

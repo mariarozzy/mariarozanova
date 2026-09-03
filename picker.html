@@ -11,21 +11,39 @@
   --yellow: #F5DD90; --charcoal: #0D0F13; --line: #283A57;
 }
 *{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
 body{
   margin:0; background: var(--bg); color: var(--ink);
-  font-family: Georgia, serif; padding: 40px;
+  font-family: Georgia, serif; padding: 0 40px 40px;
 }
 h1{ font-family:'Playfair Display', serif; margin: 0 0 4px; }
+h2{ font-family:'Playfair Display', serif; font-size:1.3rem; margin: 0; }
 .sub{ font-family:'Inconsolata', monospace; font-size:0.8rem; color: var(--sage); letter-spacing:0.04em; }
-#empty{ margin-top: 60px; font-family:'Inconsolata', monospace; color: var(--sage); font-size:0.9rem; display:none; }
 
-.grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 30px; }
+.jumpnav{
+  position: sticky; top:0; z-index:10; background: var(--bg);
+  display:flex; gap:10px; padding: 16px 0; border-bottom: 1px solid var(--line); margin-bottom: 10px;
+}
+.jumpnav a{
+  font-family:'Inconsolata', monospace; font-size:0.74rem; letter-spacing:0.06em; text-transform:uppercase;
+  color: var(--ink); text-decoration:none; background: var(--bg-panel); border: 1px solid var(--line);
+  border-radius: 999px; padding: 8px 16px;
+}
+.jumpnav a:hover{ border-color: var(--yellow); color: var(--yellow); }
+
+.section{ margin-top: 56px; scroll-margin-top: 70px; }
+.section:first-of-type{ margin-top: 30px; }
+.section-head{ display:flex; align-items:baseline; gap:14px; margin-bottom: 6px; }
+#emptyInbox, #emptyAssigned{ margin-top: 30px; font-family:'Inconsolata', monospace; color: var(--sage); font-size:0.9rem; display:none; }
+
+.grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 20px; }
 .card{
   background: var(--bg-panel); border: 1px solid var(--line); border-radius: 4px; overflow:hidden;
   display:flex; flex-direction:column; transition: opacity 0.3s ease, transform 0.3s ease;
 }
 .card.removing{ opacity:0; transform: scale(0.94); }
-.card img{ width:100%; aspect-ratio: 4/3; object-fit:cover; display:block; background: var(--charcoal); }
+.card img{ width:100%; aspect-ratio: 4/3; object-fit:cover; display:block; background: var(--charcoal); cursor: zoom-in; }
+.card img:hover{ opacity: 0.88; }
 .card-body{ padding: 12px; display:flex; flex-direction:column; gap:8px; }
 .card-name{
   font-family:'Inconsolata', monospace; font-size: 0.66rem; color: var(--sage);
@@ -44,39 +62,132 @@ button{
   border-radius: 999px; padding: 8px 0; cursor:pointer; border: 1px solid transparent;
 }
 .assign{ background: var(--yellow); color: var(--charcoal); font-weight:600; }
-.discard{ background: transparent; color: var(--sage); border-color: var(--line); }
-.discard:hover{ color: var(--ink); border-color: var(--sage); }
+.discard, .remove{ background: transparent; color: var(--sage); border-color: var(--line); }
+.discard:hover, .remove:hover{ color: var(--ink); border-color: var(--sage); }
 .status{ font-family:'Inconsolata', monospace; font-size:0.68rem; color: var(--yellow); min-height: 1em; }
+
+/* ---------- editor modal ---------- */
+.editor-overlay{
+  position: fixed; inset:0; background: rgba(10,15,25,0.92); z-index:50;
+  display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px;
+}
+.editor-overlay.open{ display:flex; }
+.editor-panel{ display:flex; flex-direction:column; align-items:center; gap:14px; max-width: 92vw; }
+.editor-image-wrap{
+  position:relative; max-width: 88vw; max-height: 66vh; line-height:0;
+  user-select:none; -webkit-user-select:none;
+}
+.editor-image-wrap img{ display:block; max-width: 88vw; max-height: 66vh; width:auto; height:auto; }
+.editor-image-wrap.cropping img{ cursor: crosshair; }
+.crop-box{
+  position:absolute; border: 1.5px dashed var(--yellow); background: rgba(245,221,144,0.12);
+  display:none; pointer-events:none;
+}
+.editor-toolbar{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; max-width: 88vw; }
+.editor-toolbar button{
+  flex: 0 0 auto; background: var(--bg-panel); color: var(--ink); border: 1px solid var(--line);
+  padding: 9px 16px;
+}
+.editor-toolbar button:hover{ border-color: var(--yellow); color: var(--yellow); }
+.editor-toolbar button.primary{ background: var(--yellow); color: var(--charcoal); border-color: var(--yellow); font-weight:600; }
+.editor-toolbar button.close{ color: var(--sage); }
+.editor-status{ font-family:'Inconsolata', monospace; font-size:0.7rem; color: var(--yellow); min-height:1em; }
 </style>
 </head>
 <body>
-<h1>Photo Picker</h1>
-<span class="sub" id="count">Loading…</span>
-<div id="empty">No photos in the inbox — drop some into <code>photos_inbox/</code> and reload this page.</div>
-<div class="grid" id="grid"></div>
+<div style="padding-top:24px;">
+  <h1>Photo Picker</h1>
+  <span class="sub">Sort new photos into galleries, fix ones that landed in the wrong place, and clean up rotation/crop issues — all in one spot.</span>
+</div>
+
+<div class="jumpnav">
+  <a href="#inboxSection">Inbox &darr;</a>
+  <a href="#assignedSection">Already in the gallery &darr;</a>
+</div>
+
+<div class="section" id="inboxSection">
+  <div class="section-head"><h2>Inbox</h2><span class="sub" id="inboxCount">Loading…</span></div>
+  <div id="emptyInbox">No photos in the inbox — drop some into <code>photos_inbox/</code> and reload this page.</div>
+  <div class="grid" id="inboxGrid"></div>
+</div>
+
+<div class="section" id="assignedSection">
+  <div class="section-head"><h2>Already in the gallery</h2><span class="sub" id="assignedCount">Loading…</span></div>
+  <span class="sub">Change the gallery or gear and click Move to re-sort a photo, or click its thumbnail to rotate/crop/flip it.</span>
+  <div id="emptyAssigned">Nothing assigned yet.</div>
+  <div class="grid" id="assignedGrid"></div>
+</div>
+
+<div class="editor-overlay" id="editorOverlay">
+  <div class="editor-panel">
+    <div class="editor-image-wrap" id="editorImageWrap">
+      <img id="editorImg" src="" alt="">
+      <div class="crop-box" id="cropBox"></div>
+    </div>
+    <div class="editor-toolbar">
+      <button id="rotateLeft">&#8634; Rotate left</button>
+      <button id="rotateRight">&#8635; Rotate right</button>
+      <button id="rotate180">180&deg;</button>
+      <button id="flipH">&#8596; Flip horizontal</button>
+      <button id="flipV">&#8597; Flip vertical</button>
+      <button id="cropToggle">Crop</button>
+      <button id="cropApply" class="primary" style="display:none;">Apply crop</button>
+      <button id="cropCancel" style="display:none;">Cancel crop</button>
+      <button id="editorClose" class="close">Done</button>
+    </div>
+    <div class="editor-status" id="editorStatus"></div>
+  </div>
+</div>
 
 <script>
-const grid = document.getElementById('grid');
-const countEl = document.getElementById('count');
-const emptyEl = document.getElementById('empty');
+const inboxGrid = document.getElementById('inboxGrid');
+const assignedGrid = document.getElementById('assignedGrid');
+const inboxCount = document.getElementById('inboxCount');
+const assignedCount = document.getElementById('assignedCount');
+const emptyInbox = document.getElementById('emptyInbox');
+const emptyAssigned = document.getElementById('emptyAssigned');
 
-async function load() {
-  const res = await fetch('/api/inbox');
-  const data = await res.json();
-  render(data);
+let galleryOpts = [];
+let gearOpts = [];
+let gearLabels = {};
+
+async function loadAll() {
+  const [inboxRes, assignedRes] = await Promise.all([
+    fetch('/api/inbox').then(r => r.json()),
+    fetch('/api/assigned').then(r => r.json())
+  ]);
+  galleryOpts = inboxRes.galleries;
+  gearOpts = inboxRes.gear;
+  gearLabels = inboxRes.gearLabels;
+  renderInbox(inboxRes.files);
+  renderAssigned(assignedRes.files);
 }
 
-function render(data) {
-  grid.innerHTML = '';
-  countEl.textContent = data.files.length + ' photo(s) in the inbox';
-  emptyEl.style.display = data.files.length ? 'none' : 'block';
+function makeSelect(options, labelFn, selected) {
+  const sel = document.createElement('select');
+  options.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = labelFn(v);
+    if (v === selected) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  return sel;
+}
 
-  data.files.forEach(filename => {
+function renderInbox(files) {
+  inboxGrid.innerHTML = '';
+  inboxCount.textContent = files.length + ' photo(s)';
+  emptyInbox.style.display = files.length ? 'none' : 'block';
+
+  files.forEach(file => {
+    const filename = file.path;
     const card = document.createElement('div');
     card.className = 'card';
 
     const img = document.createElement('img');
-    img.src = '/inbox/' + encodeURIComponent(filename);
+    img.loading = 'lazy';
+    img.src = '/inbox/' + filename.split('/').map(encodeURIComponent).join('/');
+    img.onclick = () => openEditor({ source: 'inbox', path: filename, imgEl: img });
     card.appendChild(img);
 
     const body = document.createElement('div');
@@ -84,26 +195,15 @@ function render(data) {
 
     const name = document.createElement('div');
     name.className = 'card-name';
+    name.title = filename;
     name.textContent = filename;
     body.appendChild(name);
 
     const row = document.createElement('div');
     row.className = 'row';
-
-    const gallerySel = document.createElement('select');
-    data.galleries.forEach(g => {
-      const opt = document.createElement('option');
-      opt.value = g; opt.textContent = g[0].toUpperCase() + g.slice(1);
-      gallerySel.appendChild(opt);
-    });
+    const gallerySel = makeSelect(galleryOpts, g => g[0].toUpperCase() + g.slice(1), null);
+    const gearSel = makeSelect(gearOpts, g => gearLabels[g], file.guessedGear);
     row.appendChild(gallerySel);
-
-    const gearSel = document.createElement('select');
-    data.gear.forEach(g => {
-      const opt = document.createElement('option');
-      opt.value = g; opt.textContent = data.gearLabels[g];
-      gearSel.appendChild(opt);
-    });
     row.appendChild(gearSel);
     body.appendChild(row);
 
@@ -119,23 +219,109 @@ function render(data) {
     assignBtn.textContent = 'Assign';
     assignBtn.onclick = () => act('/api/assign', {
       filename, gallery: gallerySel.value, gear: gearSel.value
-    }, card, status, 'Assigned');
+    }, card, status, 'Assigned', () => { inboxGrid.removeChild(card); updateInboxCount(); });
 
     const discardBtn = document.createElement('button');
     discardBtn.className = 'discard';
     discardBtn.textContent = 'Discard';
-    discardBtn.onclick = () => act('/api/discard', { filename }, card, status, 'Discarded');
+    discardBtn.onclick = () => act('/api/discard', { filename }, card, status, 'Discarded', () => { inboxGrid.removeChild(card); updateInboxCount(); });
 
     actions.appendChild(assignBtn);
     actions.appendChild(discardBtn);
     body.appendChild(actions);
 
     card.appendChild(body);
-    grid.appendChild(card);
+    inboxGrid.appendChild(card);
   });
 }
 
-async function act(url, payload, card, status, verb) {
+function updateInboxCount() {
+  const remaining = inboxGrid.children.length;
+  inboxCount.textContent = remaining + ' photo(s)';
+  emptyInbox.style.display = remaining ? 'none' : 'block';
+}
+
+function renderAssigned(files) {
+  assignedGrid.innerHTML = '';
+  assignedCount.textContent = files.length + ' photo(s)';
+  emptyAssigned.style.display = files.length ? 'none' : 'block';
+
+  files.forEach(file => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    let currentPath = file.path;
+
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.src = '/photos/' + currentPath.split('/').map(encodeURIComponent).join('/');
+    img.onclick = () => openEditor({ source: 'photos', path: currentPath, imgEl: img });
+    card.appendChild(img);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    const name = document.createElement('div');
+    name.className = 'card-name';
+    name.title = currentPath;
+    name.textContent = currentPath;
+    body.appendChild(name);
+
+    const row = document.createElement('div');
+    row.className = 'row';
+    const gallerySel = makeSelect(galleryOpts, g => g[0].toUpperCase() + g.slice(1), file.gallery);
+    const gearSel = makeSelect(gearOpts, g => gearLabels[g], file.gear);
+    row.appendChild(gallerySel);
+    row.appendChild(gearSel);
+    body.appendChild(row);
+
+    const status = document.createElement('div');
+    status.className = 'status';
+    body.appendChild(status);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const moveBtn = document.createElement('button');
+    moveBtn.className = 'assign';
+    moveBtn.textContent = 'Move';
+    moveBtn.onclick = async () => {
+      status.textContent = 'Moving…';
+      try {
+        const res = await fetch('/api/reassign', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: currentPath, gallery: gallerySel.value, gear: gearSel.value })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) { status.textContent = data.error || 'Something went wrong'; return; }
+        currentPath = data.path;
+        name.title = currentPath; name.textContent = currentPath;
+        img.src = '/photos/' + currentPath.split('/').map(encodeURIComponent).join('/') + '?v=' + Date.now();
+        status.textContent = 'Moved';
+        setTimeout(() => { status.textContent = ''; }, 1200);
+      } catch (e) { status.textContent = 'Network error'; }
+    };
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = () => act('/api/unassign', { path: currentPath }, card, status, 'Removed', () => { assignedGrid.removeChild(card); updateAssignedCount(); });
+
+    actions.appendChild(moveBtn);
+    actions.appendChild(removeBtn);
+    body.appendChild(actions);
+
+    card.appendChild(body);
+    assignedGrid.appendChild(card);
+  });
+}
+
+function updateAssignedCount() {
+  const remaining = assignedGrid.children.length;
+  assignedCount.textContent = remaining + ' photo(s)';
+  emptyAssigned.style.display = remaining ? 'none' : 'block';
+}
+
+async function act(url, payload, card, status, verb, onDone) {
   status.textContent = 'Working…';
   try {
     const res = await fetch(url, {
@@ -150,18 +336,145 @@ async function act(url, payload, card, status, verb) {
     }
     status.textContent = verb;
     card.classList.add('removing');
-    setTimeout(() => {
-      card.remove();
-      const remaining = grid.children.length;
-      countEl.textContent = remaining + ' photo(s) in the inbox';
-      emptyEl.style.display = remaining ? 'none' : 'block';
-    }, 300);
+    setTimeout(onDone, 300);
   } catch (e) {
     status.textContent = 'Network error';
   }
 }
 
-load();
+/* ---------- editor: rotate / flip / crop ---------- */
+const overlay = document.getElementById('editorOverlay');
+const imageWrap = document.getElementById('editorImageWrap');
+const editorImg = document.getElementById('editorImg');
+const cropBox = document.getElementById('cropBox');
+const editorStatus = document.getElementById('editorStatus');
+const cropToggleBtn = document.getElementById('cropToggle');
+const cropApplyBtn = document.getElementById('cropApply');
+const cropCancelBtn = document.getElementById('cropCancel');
+
+let current = null; // { source, path, imgEl }
+let cropping = false;
+let dragStart = null;
+let cropRect = null; // in displayed (on-screen) px, relative to imageWrap
+
+function openEditor(target) {
+  current = target;
+  editorStatus.textContent = '';
+  exitCropMode();
+  const base = target.source === 'inbox' ? '/inbox/' : '/photos/';
+  editorImg.src = base + target.path.split('/').map(encodeURIComponent).join('/') + '?v=' + Date.now();
+  overlay.classList.add('open');
+}
+
+function closeEditor() {
+  overlay.classList.remove('open');
+  exitCropMode();
+  current = null;
+}
+document.getElementById('editorClose').onclick = closeEditor;
+overlay.addEventListener('click', e => { if (e.target === overlay) closeEditor(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeEditor(); });
+
+function refreshEditorImage() {
+  editorImg.src = editorImg.src.split('?')[0] + '?v=' + Date.now();
+}
+
+function refreshSourceThumb() {
+  if (!current) return;
+  current.imgEl.src = current.imgEl.src.split('?')[0] + '?v=' + Date.now();
+}
+
+async function sendTransform(body) {
+  editorStatus.textContent = 'Working…';
+  try {
+    const res = await fetch('/api/transform', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ source: current.source, path: current.path }, body))
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) { editorStatus.textContent = data.error || 'Something went wrong'; return; }
+    editorStatus.textContent = 'Saved';
+    refreshEditorImage();
+    refreshSourceThumb();
+    setTimeout(() => { editorStatus.textContent = ''; }, 1000);
+  } catch (e) {
+    editorStatus.textContent = 'Network error';
+  }
+}
+
+document.getElementById('rotateLeft').onclick = () => sendTransform({ action: 'rotate', degrees: 270 });
+document.getElementById('rotateRight').onclick = () => sendTransform({ action: 'rotate', degrees: 90 });
+document.getElementById('rotate180').onclick = () => sendTransform({ action: 'rotate', degrees: 180 });
+document.getElementById('flipH').onclick = () => sendTransform({ action: 'flip', axis: 'horizontal' });
+document.getElementById('flipV').onclick = () => sendTransform({ action: 'flip', axis: 'vertical' });
+
+function enterCropMode() {
+  cropping = true;
+  imageWrap.classList.add('cropping');
+  cropToggleBtn.style.display = 'none';
+  editorStatus.textContent = 'Drag on the photo to select a crop area.';
+}
+function exitCropMode() {
+  cropping = false;
+  dragStart = null;
+  cropRect = null;
+  imageWrap.classList.remove('cropping');
+  cropBox.style.display = 'none';
+  cropToggleBtn.style.display = '';
+  cropApplyBtn.style.display = 'none';
+  cropCancelBtn.style.display = 'none';
+}
+cropToggleBtn.onclick = enterCropMode;
+cropCancelBtn.onclick = exitCropMode;
+
+imageWrap.addEventListener('mousedown', e => {
+  if (!cropping) return;
+  const rect = editorImg.getBoundingClientRect();
+  const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width);
+  const y = Math.min(Math.max(e.clientY - rect.top, 0), rect.height);
+  dragStart = { x, y, imgRect: rect };
+  cropBox.style.display = 'block';
+  cropBox.style.left = x + 'px'; cropBox.style.top = y + 'px';
+  cropBox.style.width = '0px'; cropBox.style.height = '0px';
+  cropApplyBtn.style.display = 'none';
+  cropCancelBtn.style.display = 'none';
+});
+imageWrap.addEventListener('mousemove', e => {
+  if (!cropping || !dragStart) return;
+  const rect = dragStart.imgRect;
+  const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width);
+  const y = Math.min(Math.max(e.clientY - rect.top, 0), rect.height);
+  const left = Math.min(x, dragStart.x), top = Math.min(y, dragStart.y);
+  const w = Math.abs(x - dragStart.x), h = Math.abs(y - dragStart.y);
+  cropBox.style.left = left + 'px'; cropBox.style.top = top + 'px';
+  cropBox.style.width = w + 'px'; cropBox.style.height = h + 'px';
+  cropRect = { left, top, w, h, displayW: rect.width, displayH: rect.height };
+});
+imageWrap.addEventListener('mouseup', () => {
+  if (!cropping || !dragStart) return;
+  dragStart = null;
+  if (cropRect && cropRect.w > 6 && cropRect.h > 6) {
+    cropApplyBtn.style.display = '';
+    cropCancelBtn.style.display = '';
+    editorStatus.textContent = 'Apply crop, or drag again to adjust.';
+  }
+});
+
+cropApplyBtn.onclick = async () => {
+  if (!cropRect) return;
+  const scaleX = editorImg.naturalWidth / cropRect.displayW;
+  const scaleY = editorImg.naturalHeight / cropRect.displayH;
+  const box = [
+    Math.round(cropRect.left * scaleX),
+    Math.round(cropRect.top * scaleY),
+    Math.round(cropRect.w * scaleX),
+    Math.round(cropRect.h * scaleY)
+  ];
+  await sendTransform({ action: 'crop', box });
+  exitCropMode();
+};
+
+loadAll();
 </script>
 </body>
 </html>

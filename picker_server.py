@@ -25,6 +25,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from PIL import Image
+
 from build_galleries import GEAR_LABELS, IMAGE_EXTS, GALLERIES, strip_gps
 
 ROOT = Path(__file__).parent
@@ -33,12 +35,66 @@ DISCARDED = INBOX / "_discarded"
 PORT = 8766
 
 
+def resolve_under(base: Path, rel_path: str):
+    """Resolve rel_path under base, refusing anything that escapes it."""
+    if not rel_path:
+        return None
+    target = (base / rel_path).resolve()
+    if base.resolve() not in target.parents:
+        return None
+    return target
+
+
+def unique_dest(dest_dir: Path, name: str) -> Path:
+    dest = dest_dir / name
+    if not dest.exists():
+        return dest
+    stem, suffix, n = Path(name).stem, Path(name).suffix, 2
+    while (dest_dir / f"{stem}-{n}{suffix}").exists():
+        n += 1
+    return dest_dir / f"{stem}-{n}{suffix}"
+
+
+def guess_gear(rel_path: str) -> str:
+    """Best-effort default gear guess from folder names, e.g. .../film/HK/x.jpg"""
+    lower = rel_path.lower()
+    if "film" in lower:
+        return "film"
+    if "leica" in lower:
+        return "leica"
+    return "iphone"
+
+
 def list_inbox():
     INBOX.mkdir(exist_ok=True)
-    return sorted(
-        f.name for f in INBOX.iterdir()
-        if f.is_file() and f.suffix.lower() in IMAGE_EXTS
-    )
+    files = []
+    for f in INBOX.rglob("*"):
+        if not f.is_file() or f.suffix.lower() not in IMAGE_EXTS:
+            continue
+        if DISCARDED in f.parents:
+            continue
+        rel = f.relative_to(INBOX).as_posix()
+        files.append({"path": rel, "guessedGear": guess_gear(rel)})
+    return sorted(files, key=lambda x: x["path"])
+
+
+def list_assigned():
+    """Every photo already sorted into photos/<gallery>/<gear>/, so it can be
+    reviewed and moved to a different gallery/gear without touching Finder."""
+    files = []
+    for gallery in GALLERIES:
+        for gear in GEAR_LABELS:
+            folder = ROOT / "photos" / gallery / gear
+            if not folder.exists():
+                continue
+            for f in sorted(folder.iterdir()):
+                if f.is_file() and f.suffix.lower() in IMAGE_EXTS:
+                    files.append({
+                        "path": f.relative_to(ROOT / "photos").as_posix(),
+                        "gallery": gallery,
+                        "gear": gear,
+                    })
+    return files
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -75,8 +131,21 @@ class Handler(BaseHTTPRequestHandler):
                 "gear": list(GEAR_LABELS.keys()),
                 "gearLabels": GEAR_LABELS,
             })
+        elif path == "/api/assigned":
+            self._json({
+                "files": list_assigned(),
+                "galleries": GALLERIES,
+                "gear": list(GEAR_LABELS.keys()),
+                "gearLabels": GEAR_LABELS,
+            })
         elif path.startswith("/inbox/"):
             self._file(INBOX / path[len("/inbox/"):])
+        elif path.startswith("/photos/"):
+            target = (ROOT / path.lstrip("/")).resolve()
+            if (ROOT / "photos").resolve() not in target.parents:
+                self.send_error(404)
+                return
+            self._file(target)
         else:
             self.send_error(404)
 
@@ -89,17 +158,29 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "bad request body"}, 400)
             return
 
-        filename = payload.get("filename", "")
-        src = (INBOX / filename)
-        # keep the move inside photos_inbox/ — reject anything that isn't a plain filename
-        if not filename or src.parent.resolve() != INBOX.resolve():
-            self._json({"error": "invalid filename"}, 400)
+        if parsed.path == "/api/transform":
+            self._handle_transform(payload)
+        elif parsed.path == "/api/reassign":
+            self._handle_reassign(payload)
+        elif parsed.path == "/api/unassign":
+            self._handle_unassign(payload)
+        elif parsed.path in ("/api/assign", "/api/discard"):
+            self._handle_inbox_action(parsed.path, payload)
+        else:
+            self.send_error(404)
+
+    def _handle_inbox_action(self, route, payload):
+        rel_path = payload.get("filename", "")  # may be a nested relative path
+        src = (INBOX / rel_path).resolve() if rel_path else None
+        # keep the move inside photos_inbox/, however deep — reject anything that escapes it
+        if not rel_path or INBOX.resolve() not in src.parents:
+            self._json({"error": "invalid path"}, 400)
             return
         if not src.exists():
             self._json({"error": "file not found"}, 404)
             return
 
-        if parsed.path == "/api/assign":
+        if route == "/api/assign":
             gallery = payload.get("gallery")
             gear = payload.get("gear")
             if gallery not in GALLERIES or gear not in GEAR_LABELS:
@@ -107,18 +188,110 @@ class Handler(BaseHTTPRequestHandler):
                 return
             dest_dir = ROOT / "photos" / gallery / gear
             dest_dir.mkdir(parents=True, exist_ok=True)
-            dest = dest_dir / src.name
+            dest = unique_dest(dest_dir, src.name)
             src.rename(dest)
             strip_gps(dest)
             self._json({"ok": True})
-
-        elif parsed.path == "/api/discard":
+        else:  # /api/discard
             DISCARDED.mkdir(exist_ok=True)
-            src.rename(DISCARDED / src.name)
+            dest = unique_dest(DISCARDED, src.name)
+            src.rename(dest)
             self._json({"ok": True})
 
-        else:
-            self.send_error(404)
+    def _handle_reassign(self, payload):
+        """Move a photo already sorted into photos/<gallery>/<gear>/ to a
+        different gallery and/or gear."""
+        rel_path = payload.get("path", "")
+        gallery = payload.get("gallery")
+        gear = payload.get("gear")
+        src = resolve_under(ROOT / "photos", rel_path)
+        if not src or gallery not in GALLERIES or gear not in GEAR_LABELS:
+            self._json({"error": "invalid request"}, 400)
+            return
+        if not src.exists():
+            self._json({"error": "file not found"}, 404)
+            return
+
+        dest_dir = ROOT / "photos" / gallery / gear
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = src if src.parent == dest_dir else unique_dest(dest_dir, src.name)
+        if dest != src:
+            src.rename(dest)
+        self._json({"ok": True, "path": dest.relative_to(ROOT / "photos").as_posix()})
+
+    def _handle_unassign(self, payload):
+        """Pull a photo back out of the gallery into the discard pile —
+        nothing is ever permanently deleted from here."""
+        rel_path = payload.get("path", "")
+        src = resolve_under(ROOT / "photos", rel_path)
+        if not src:
+            self._json({"error": "invalid request"}, 400)
+            return
+        if not src.exists():
+            self._json({"error": "file not found"}, 404)
+            return
+        DISCARDED.mkdir(exist_ok=True)
+        dest = unique_dest(DISCARDED, src.name)
+        src.rename(dest)
+        self._json({"ok": True})
+
+    def _handle_transform(self, payload):
+        """Rotate, flip, or crop a photo in place — works on inbox photos and
+        already-assigned ones alike, so a bad scan can be fixed on the spot."""
+        source = payload.get("source")
+        rel_path = payload.get("path", "")
+        base = INBOX if source == "inbox" else (ROOT / "photos" if source == "photos" else None)
+        target = resolve_under(base, rel_path) if base else None
+        if not target:
+            self._json({"error": "invalid request"}, 400)
+            return
+        if not target.exists():
+            self._json({"error": "file not found"}, 404)
+            return
+
+        action = payload.get("action")
+        try:
+            with Image.open(target) as img:
+                img.load()
+                if action == "rotate":
+                    degrees = str(payload.get("degrees"))
+                    rotate_map = {"90": Image.ROTATE_90, "180": Image.ROTATE_180, "270": Image.ROTATE_270}
+                    if degrees not in rotate_map:
+                        self._json({"error": "invalid degrees"}, 400)
+                        return
+                    result = img.transpose(rotate_map[degrees])
+                elif action == "flip":
+                    axis = payload.get("axis")
+                    flip_map = {"horizontal": Image.FLIP_LEFT_RIGHT, "vertical": Image.FLIP_TOP_BOTTOM}
+                    if axis not in flip_map:
+                        self._json({"error": "invalid axis"}, 400)
+                        return
+                    result = img.transpose(flip_map[axis])
+                elif action == "crop":
+                    box = payload.get("box")  # [x, y, w, h] in original-image pixels
+                    if not (isinstance(box, list) and len(box) == 4):
+                        self._json({"error": "invalid crop box"}, 400)
+                        return
+                    x, y, w, h = box
+                    iw, ih = img.size
+                    x = max(0, min(int(x), iw - 1))
+                    y = max(0, min(int(y), ih - 1))
+                    w = max(1, min(int(w), iw - x))
+                    h = max(1, min(int(h), ih - y))
+                    result = img.crop((x, y, x + w, y + h))
+                else:
+                    self._json({"error": "invalid action"}, 400)
+                    return
+
+                save_kwargs = {"quality": 95} if target.suffix.lower() in {".jpg", ".jpeg"} else {}
+                result.save(target, **save_kwargs)
+        except Exception as e:
+            self._json({"error": f"couldn't process image: {e}"}, 500)
+            return
+
+        with Image.open(target) as img:
+            w, h = img.size
+        self._json({"ok": True, "width": w, "height": h})
 
     def log_message(self, fmt, *args):
         pass  # keep the terminal quiet
